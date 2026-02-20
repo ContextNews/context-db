@@ -70,6 +70,19 @@ class ArticleClusterArticle(Base):
     article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
 
 
+class Topic(Base):
+    __tablename__ = "topics"
+
+    topic = Column(String, primary_key=True)
+
+
+class ArticleTopic(Base):
+    __tablename__ = "article_topics"
+
+    article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
+    topic = Column(String, ForeignKey("topics.topic"), primary_key=True)
+
+
 class Story(Base):
     __tablename__ = "stories"
 
