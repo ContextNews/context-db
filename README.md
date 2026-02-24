@@ -2,6 +2,10 @@
 
 This repo contains shared data contracts and database migrations.
 
+## Schema
+
+![ERD](erd.png)
+
 ## Setup
 
 1. Copy environment file and update values:
