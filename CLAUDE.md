@@ -26,8 +26,8 @@ context-data-schema = { git = "https://github.com/org/context-data-schema.git" }
 Then import models and the session helper:
 
 ```python
-from rds_postgres.models import Article, Story, ...
-from rds_postgres.connection import get_session
+from context_db.models import Article, Story, ...
+from context_db.connection import get_session
 ```
 
 ## Migrations
@@ -35,7 +35,7 @@ from rds_postgres.connection import get_session
 All migration commands require `DATABASE_URL` to be set (picked up from `.env` or environment).
 
 ```bash
-# Generate a new migration after editing rds_postgres/models.py
+# Generate a new migration after editing model files
 poetry run alembic revision --autogenerate -m "description of changes"
 
 # Apply all pending migrations
@@ -45,34 +45,42 @@ poetry run alembic upgrade head
 poetry run alembic downgrade -1
 ```
 
-Always review the auto-generated file in `rds_postgres/alembic/versions/` before applying — autogenerate may miss custom types or index details.
+Always review the auto-generated file in `context_db/alembic/versions/` before applying — autogenerate may miss custom types or index details.
 
 ## ERD generation
 
-The dev dependency `eralchemy2` can regenerate the entity-relationship diagram:
+The dev dependency `eralchemy2` can regenerate the entity-relationship diagram from the ORM metadata (no live DB needed):
 
 ```bash
-poetry run eralchemy2 -i postgresql://... -o erd.png
+poetry run python scripts/generate_erd.py
 ```
 
 ## Architecture
 
 ### Package layout
 
-- `rds_postgres/models.py` — single file containing all SQLAlchemy ORM models (the source of truth for the schema)
-- `rds_postgres/connection.py` — engine and `get_session()` context manager used by consumers
-- `rds_postgres/alembic/` — Alembic migration environment; `env.py` wires `Base.metadata` into Alembic and filters out PostGIS/extension objects from autogenerate
+- `context_db/models/` — domain-split SQLAlchemy ORM models (source of truth for the schema):
+  - `base.py` — `Base = declarative_base()`
+  - `core_article.py` — `Article`, `ArticleCluster`, `ArticleClusterArticle`
+  - `nlp_mentions.py` — `ArticleEmbedding`, `ArticleEntityMention`
+  - `topics.py` — `Topic`, `ArticleTopic`, `StoryTopic`
+  - `kb_entities.py` — `KBEntity`, `KBEntityAlias`, `KBLocation`, `KBPerson`
+  - `story.py` — `Story`, `ArticleStory`, `ArticleEntityResolved`, `StoryEntity`, `StoryEdge`
+  - `__init__.py` — re-exports all public model classes
+- `context_db/connection.py` — engine and `get_session()` context manager used by consumers
+- `context_db/alembic/` — Alembic migration environment; `env.py` wires `Base.metadata` into Alembic and filters out PostGIS/extension objects from autogenerate
 - `common/article_contract.json` — JSON Schema contract for the article message format exchanged between services
-- `plans/v2_schema_rework.md` — planned major schema refactor (not yet implemented); see below
 
 ### Key design points
 
 - **pgvector**: `ArticleEmbedding.embedding` uses `Vector(None)` (dimensionless) so the same column works for any embedding model dimension. The `render_item` hook in `alembic/env.py` injects the `import pgvector` statement and returns `False` to defer to default rendering; without this hook, autogenerate drops pgvector columns.
-- **PostGIS**: `Location.coordinates` uses `Geography(geometry_type="POINT", srid=4326)`. The `include_object` hook in `alembic/env.py` suppresses PostGIS system tables from autogenerate.
+- **PostGIS**: `KBLocation.coordinates` uses `Geography(geometry_type="POINT", srid=4326)`. The `include_object` hook in `alembic/env.py` suppresses PostGIS system tables from autogenerate.
 - **SSL**: `connection.py` enforces `sslmode=require` on the engine — local tunnels must present a valid SSL certificate.
-- **Composite PKs**: many junction/association tables use composite primary keys rather than surrogate IDs (e.g. `ArticleEntity`, `ArticleLocation`, `StoryLocation`, `PersonAlias`).
-- **Self-referencing**: `Story.parent_story_id` is a self-FK; `StoryStory` is a separate many-to-many table for peer relationships between stories.
-- **Known schema gap**: `StoryTopic.topic` is a plain `String` column with no FK to `topics.topic`, unlike `ArticleTopic.topic` which does have the FK. This is a known inconsistency in the current schema.
+- **Composite PKs**: junction/association tables use composite primary keys rather than surrogate IDs (e.g. `ArticleEntityResolved`, `StoryEntity`, `KBEntityAlias`).
+- **Self-referencing**: `Story.parent_story_id` is a self-FK for story hierarchy. `StoryEdge` is a separate directional table for typed peer relationships between stories (`from_story_id` → `to_story_id`).
+- **KB entity hierarchy**: `KBEntity` is the base table (Wikidata QID as PK); `KBLocation` and `KBPerson` are specialisation tables joined on `qid`. Filter on `entity_type` to distinguish `location`, `person`, etc. Do not query `kb_locations` / `kb_persons` directly for entity metadata — always join to `kb_entities`.
+- **NLP mentions vs resolved entities**: `ArticleEntityMention` stores raw NLP surface forms (not KB-resolved). `ArticleEntityResolved` and `StoryEntity` store canonical KB links (via `qid`). These are distinct pipeline stages.
+- **Rename safety**: Alembic autogenerate cannot detect renames — it emits drop + recreate and loses data. Always hand-write migrations for column or table renames (see `plans/v2_schema_rework.md` for the pattern).
 
 ### Article contract (`common/article_contract.json`)
 
@@ -83,28 +91,17 @@ Required fields: `id`, `title`, `url`, `ingested_at`. Optional: `headline`, `tex
 | Table | Purpose |
 |---|---|
 | `articles` | Raw ingested news articles |
-| `article_embeddings` | Vector embeddings per article × model |
+| `article_embeddings` | Vector embeddings per article × model (`article_id`, `embedding_model` composite PK) |
 | `article_clusters` / `article_cluster_articles` | Grouping articles into clusters by period |
-| `article_topics` / `topics` | Topic tags on articles |
-| `article_entities` / `entities` | Named entities extracted from articles |
+| `article_topics` / `topics` | Topic tags on articles (FK to `topics.topic`) |
+| `story_topics` | Topic tags on stories (FK to `topics.topic`) |
+| `article_entity_mentions` | Raw NLP surface-form entity mentions per article (pre-resolution) |
+| `article_entities_resolved` | Canonical KB entities linked to articles (post-resolution, via `qid`) |
 | `stories` | AI-generated story summaries (hierarchical via `parent_story_id`) |
-| `story_stories` | Peer relationships between stories |
-| `story_topics` | Topic tags on stories |
-| `article_stories` | Many-to-many: articles ↔ stories |
-| `locations` / `location_aliases` | Wikidata-backed geo locations with aliases |
-| `article_locations` / `story_locations` | Geo tags on articles and stories |
-| `persons` / `person_aliases` | Wikidata-backed persons with aliases |
-| `article_persons` / `story_persons` | Person tags on articles and stories |
-
-### Planned v2 schema rework (`plans/v2_schema_rework.md`)
-
-A significant refactor is planned but not yet implemented. Key changes:
-
-- Split `models.py` into domain files under `rds_postgres/models/`
-- Unify `locations` + `persons` into a single `kb_entities` / `kb_entity_aliases` hierarchy with `kb_locations` and `kb_persons` as specialisation tables (Wikidata QID as PK throughout)
-- Separate raw NLP entity mentions (`article_entity_mentions`) from resolved KB links (`article_entities_resolved`)
-- Replace `story_stories` (undirected) with `story_edges` (directional + typed)
-- Replace `article_clusters` / `article_cluster_articles` with a `cluster_label` column on `story_articles`
-- Add `embedding_kind` and `chunk_index` to `article_embeddings` PK
-
-When implementing v2, follow the incremental migration path in the plan file rather than a big-bang replacement.
+| `story_articles` | Many-to-many: articles ↔ stories (with `assigned_at`) |
+| `story_entities` | Canonical KB entities linked to stories (via `qid`, with optional `role`) |
+| `story_edges` | Directional typed relationships between stories (`from_story_id` → `to_story_id`) |
+| `kb_entities` | Canonical Wikidata-backed entities (QID PK, `entity_type` discriminator) |
+| `kb_entity_aliases` | Name aliases for KB entities |
+| `kb_locations` | Geo-specific fields for `entity_type='location'` entities |
+| `kb_persons` | Person-specific fields for `entity_type='person'` entities |

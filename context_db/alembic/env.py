@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import pgvector.sqlalchemy
 from sqlalchemy import engine_from_config, pool
 
-from rds_postgres.models import Base
+from context_db.models import Base
 
 config = context.config
 if config.config_file_name is not None:

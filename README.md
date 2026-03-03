@@ -23,13 +23,13 @@ Ensure `DATABASE_URL` is set (local `.env` or environment).
 
 ### Generate a migration
 
-After modifying models in `rds_postgres/models.py`, generate a migration:
+After modifying models in `context_db/models.py`, generate a migration:
 
 ```bash
 poetry run alembic revision --autogenerate -m "description of changes"
 ```
 
-Review the generated file in `rds_postgres/alembic/versions/` to ensure the changes are correct.
+Review the generated file in `context_db/alembic/versions/` to ensure the changes are correct.
 
 ### Apply migrations
 
