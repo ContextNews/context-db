@@ -23,7 +23,7 @@ Ensure `DATABASE_URL` is set (local `.env` or environment).
 
 ### Generate a migration
 
-After modifying models in `context_db/models.py`, generate a migration:
+After modifying models in `context_db/models/`, generate a migration:
 
 ```bash
 poetry run alembic revision --autogenerate -m "description of changes"

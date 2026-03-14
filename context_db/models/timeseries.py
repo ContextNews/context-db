@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Date, Float, ForeignKey, Index, Integer, String
 
 from .base import Base
 
@@ -32,14 +32,12 @@ class TSIndicator(Base):
 class TSDatapoint(Base):
     __tablename__ = "ts_datapoints"
 
-    id = Column(Integer, primary_key=True)
-    indicator_id = Column(String, ForeignKey("ts_indicators.id"), nullable=False)
-    entity_id = Column(String, ForeignKey("ts_entities.id"), nullable=False)
-    date = Column(Date, nullable=False)
+    indicator_id = Column(String, ForeignKey("ts_indicators.id"), primary_key=True)
+    entity_id = Column(String, ForeignKey("ts_entities.id"), primary_key=True)
+    date = Column(Date, primary_key=True)
     value = Column(Float, nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("indicator_id", "entity_id", "date", name="uq_ts_datapoint"),
         Index("ix_ts_datapoints_indicator_entity", "indicator_id", "entity_id"),
         Index("ix_ts_datapoints_date", "date"),
     )

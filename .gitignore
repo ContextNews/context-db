@@ -24,3 +24,6 @@ dist/
 
 # Local plans
 plans/
+
+# Claude Code
+CLAUDE.md

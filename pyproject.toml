@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "context-data-schema"
+name = "context-db"
 version = "0.1.0"
 description = "Shared database models and migrations"
 authors = ["Your Name <you@example.com>"]
