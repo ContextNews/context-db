@@ -49,3 +49,10 @@ class StoryEdge(Base):
     relation_type = Column(String, nullable=True)
     score = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=True)
+
+
+class StoryIndicator(Base):
+    __tablename__ = "story_indicators"
+
+    story_id = Column(String, ForeignKey("stories.id"), primary_key=True)
+    indicator_id = Column(String, ForeignKey("ts_indicators.id"), primary_key=True)
