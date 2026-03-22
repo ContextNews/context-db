@@ -1,10 +1,110 @@
 from __future__ import annotations
 
+import json
+import urllib.request
+
 import pandas as pd
 from IPython.display import display
 from sqlalchemy import text
 
 from context_db.connection import get_session
+
+# ---------------------------------------------------------------------------
+# Wikidata helpers
+# ---------------------------------------------------------------------------
+
+_WIKIDATA_API = "https://www.wikidata.org/w/api.php"
+
+_LOCATION_TYPE_MAP = {
+    "Q515":     "city",
+    "Q1549591": "city",
+    "Q7930989": "city",
+    "Q5119":    "capital",
+    "Q3957":    "town",
+    "Q532":     "village",
+    "Q123705":  "neighbourhood",
+    "Q6256":    "country",
+    "Q3624078": "country",
+    "Q10864048": "region",
+    "Q35657":   "region",
+    "Q82794":   "region",
+}
+
+
+def _fetch_wikidata(qid: str) -> dict:
+    url = (
+        f"{_WIKIDATA_API}?action=wbgetentities&ids={qid}"
+        "&format=json&languages=en&props=labels|descriptions|aliases|claims"
+    )
+    with urllib.request.urlopen(url) as resp:
+        data = json.loads(resp.read())
+    entity = data.get("entities", {}).get(qid)
+    if not entity or "missing" in entity:
+        raise ValueError(f"QID {qid!r} not found on Wikidata")
+    return entity
+
+
+def _string_claim(entity: dict, prop: str) -> str | None:
+    for claim in entity.get("claims", {}).get(prop, []):
+        if claim.get("rank") != "deprecated":
+            val = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+            if isinstance(val, str):
+                return val
+    return None
+
+
+def _entity_claim(entity: dict, prop: str) -> str | None:
+    for claim in entity.get("claims", {}).get(prop, []):
+        if claim.get("rank") != "deprecated":
+            val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+            if isinstance(val, dict) and "id" in val:
+                return val["id"]
+    return None
+
+
+def _entity_claims(entity: dict, prop: str) -> list[str]:
+    result = []
+    for claim in entity.get("claims", {}).get(prop, []):
+        if claim.get("rank") != "deprecated":
+            val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+            if isinstance(val, dict) and "id" in val:
+                result.append(val["id"])
+    return result
+
+
+def _coordinates(entity: dict) -> tuple[float, float] | tuple[None, None]:
+    for claim in entity.get("claims", {}).get("P625", []):
+        if claim.get("rank") != "deprecated":
+            val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+            if "latitude" in val:
+                return val["latitude"], val["longitude"]
+    return None, None
+
+
+def _iso_code(country_qid: str) -> str | None:
+    try:
+        return _string_claim(_fetch_wikidata(country_qid), "P297")
+    except Exception:
+        return None
+
+
+def _nationality_codes(entity: dict) -> list[str]:
+    return [c for qid in _entity_claims(entity, "P27") if (c := _iso_code(qid))]
+
+
+def _location_type(entity: dict) -> str:
+    for qid in _entity_claims(entity, "P31"):
+        if qid in _LOCATION_TYPE_MAP:
+            return _LOCATION_TYPE_MAP[qid]
+    return "place"
+
+
+def _en_aliases(entity: dict) -> list[str]:
+    return [a["value"] for a in entity.get("aliases", {}).get("en", [])]
+
+# ---------------------------------------------------------------------------
+# Public notebook functions
+# ---------------------------------------------------------------------------
 
 
 def unresolved_entities(ner_type: str = "ALL") -> pd.DataFrame:
@@ -78,18 +178,29 @@ def lookup_entity(alias: str) -> None:
         print(f"  {a}")
 
 
-def add_location(
-    qid: str,
-    name: str,
-    description: str | None = None,
-    location_type: str = "city",
-    country_code: str | None = None,
-    lat: float | None = None,
-    lon: float | None = None,
-    aliases: list[str] | None = None,
-) -> None:
-    """Insert a location entity into kb_entities, kb_locations, and kb_entity_aliases."""
-    all_aliases = [name] + [a for a in (aliases or []) if a != name]
+def add_location(qid: str, aliases: list[str] | None = None) -> None:
+    """Fetch location data from Wikidata, show for approval, then insert."""
+    print(f"Fetching {qid} from Wikidata...")
+    entity = _fetch_wikidata(qid)
+
+    name         = entity.get("labels", {}).get("en", {}).get("value", "")
+    description  = entity.get("descriptions", {}).get("en", {}).get("value")
+    loc_type     = _location_type(entity)
+    lat, lon     = _coordinates(entity)
+    country_qid  = _entity_claim(entity, "P17")
+    country_code = _iso_code(country_qid) if country_qid else _string_claim(entity, "P297")
+    all_aliases  = sorted({name} | set(_en_aliases(entity)) | set(aliases or []))
+
+    print(f"\n  Name:          {name}")
+    print(f"  Description:   {description}")
+    print(f"  Location type: {loc_type}")
+    print(f"  Country code:  {country_code}")
+    print(f"  Coordinates:   {f'{lat}, {lon}' if lat is not None else 'none'}")
+    print(f"  Aliases ({len(all_aliases)}):   {', '.join(all_aliases)}")
+
+    if input("\nAdd this entry? [y/N]: ").strip().lower() != "y":
+        print("Cancelled.")
+        return
 
     with get_session() as session:
         session.execute(text("""
@@ -102,13 +213,13 @@ def add_location(
                 INSERT INTO kb_locations (qid, location_type, country_code, coordinates)
                 VALUES (:qid, :location_type, :country_code,
                         ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography)
-            """), {"qid": qid, "location_type": location_type,
+            """), {"qid": qid, "location_type": loc_type,
                    "country_code": country_code, "lat": lat, "lon": lon})
         else:
             session.execute(text("""
                 INSERT INTO kb_locations (qid, location_type, country_code, coordinates)
                 VALUES (:qid, :location_type, :country_code, NULL)
-            """), {"qid": qid, "location_type": location_type, "country_code": country_code})
+            """), {"qid": qid, "location_type": loc_type, "country_code": country_code})
 
         for alias in all_aliases:
             session.execute(text("""
@@ -118,18 +229,27 @@ def add_location(
 
         session.commit()
 
-    print(f"Added location {name!r} ({qid}) with {len(all_aliases)} aliases.")
+    print(f"Added {name!r} ({qid}) with {len(all_aliases)} aliases.")
 
 
-def add_person(
-    qid: str,
-    name: str,
-    description: str | None = None,
-    nationalities: list[str] | None = None,
-    aliases: list[str] | None = None,
-) -> None:
-    """Insert a person entity into kb_entities, kb_persons, and kb_entity_aliases."""
-    all_aliases = [name] + [a for a in (aliases or []) if a != name]
+def add_person(qid: str, aliases: list[str] | None = None) -> None:
+    """Fetch person data from Wikidata, show for approval, then insert."""
+    print(f"Fetching {qid} from Wikidata...")
+    entity = _fetch_wikidata(qid)
+
+    name          = entity.get("labels", {}).get("en", {}).get("value", "")
+    description   = entity.get("descriptions", {}).get("en", {}).get("value")
+    nationalities = _nationality_codes(entity)
+    all_aliases   = sorted({name} | set(_en_aliases(entity)) | set(aliases or []))
+
+    print(f"\n  Name:          {name}")
+    print(f"  Description:   {description}")
+    print(f"  Nationalities: {', '.join(nationalities) or 'none'}")
+    print(f"  Aliases ({len(all_aliases)}):   {', '.join(all_aliases)}")
+
+    if input("\nAdd this entry? [y/N]: ").strip().lower() != "y":
+        print("Cancelled.")
+        return
 
     with get_session() as session:
         session.execute(text("""
@@ -140,7 +260,7 @@ def add_person(
         session.execute(text("""
             INSERT INTO kb_persons (qid, nationalities)
             VALUES (:qid, :nationalities)
-        """), {"qid": qid, "nationalities": nationalities or []})
+        """), {"qid": qid, "nationalities": nationalities})
 
         for alias in all_aliases:
             session.execute(text("""
@@ -150,7 +270,7 @@ def add_person(
 
         session.commit()
 
-    print(f"Added person {name!r} ({qid}) with {len(all_aliases)} aliases.")
+    print(f"Added {name!r} ({qid}) with {len(all_aliases)} aliases.")
 
 
 def add_alias(qid: str, alias: str) -> None:
