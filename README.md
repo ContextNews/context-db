@@ -6,6 +6,16 @@ This repo contains shared data contracts and database migrations.
 
 ![ERD](erd.png)
 
+## Notebooks
+
+Exploratory notebooks for querying and managing the database, runnable on Google Colab.
+
+| Notebook | Description |
+|---|---|
+| [Entities](https://colab.research.google.com/github/ContextNews/context-db/blob/main/notebooks/entities.ipynb) | Browse unresolved entities, look up by alias, add locations/persons/aliases |
+
+> **Before running:** add `DATABASE_URL` to your Colab secrets (key icon in the left sidebar).
+
 ## Setup
 
 1. Copy environment file and update values:
