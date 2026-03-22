@@ -99,6 +99,16 @@ def _location_type(entity: dict) -> str:
     return "place"
 
 
+def _label(entity: dict) -> str:
+    """Get English label, falling back to multilingual label."""
+    labels = entity.get("labels", {})
+    return (
+        labels.get("en", {}).get("value")
+        or labels.get("mul", {}).get("value")
+        or ""
+    )
+
+
 def _en_aliases(entity: dict) -> list[str]:
     return [a["value"] for a in entity.get("aliases", {}).get("en", [])]
 
@@ -178,12 +188,30 @@ def lookup_entity(alias: str) -> None:
         print(f"  {a}")
 
 
+def _check_exists(qid: str) -> bool:
+    """Return True and print a message if the entity is already in the KB."""
+    with get_session() as session:
+        row = session.execute(
+            text("SELECT name FROM kb_entities WHERE qid = :qid"), {"qid": qid}
+        ).one_or_none()
+    if row:
+        print(f"{qid} is already in the KB as {row.name!r}")
+        return True
+    return False
+
+
 def add_location(qid: str, aliases: list[str] | None = None) -> None:
     """Fetch location data from Wikidata, show for approval, then insert."""
+    if _check_exists(qid):
+        return
+
     print(f"Fetching {qid} from Wikidata...")
     entity = _fetch_wikidata(qid)
 
-    name         = entity.get("labels", {}).get("en", {}).get("value", "")
+    name         = _label(entity)
+    if not name:
+        print(f"No label found for {qid} on Wikidata. Check the QID and try again.")
+        return
     description  = entity.get("descriptions", {}).get("en", {}).get("value")
     loc_type     = _location_type(entity)
     lat, lon     = _coordinates(entity)
@@ -234,10 +262,16 @@ def add_location(qid: str, aliases: list[str] | None = None) -> None:
 
 def add_person(qid: str, aliases: list[str] | None = None) -> None:
     """Fetch person data from Wikidata, show for approval, then insert."""
+    if _check_exists(qid):
+        return
+
     print(f"Fetching {qid} from Wikidata...")
     entity = _fetch_wikidata(qid)
 
-    name          = entity.get("labels", {}).get("en", {}).get("value", "")
+    name          = _label(entity)
+    if not name:
+        print(f"No label found for {qid} on Wikidata. Check the QID and try again.")
+        return
     description   = entity.get("descriptions", {}).get("en", {}).get("value")
     nationalities = _nationality_codes(entity)
     all_aliases   = sorted({name} | set(_en_aliases(entity)) | set(aliases or []))
