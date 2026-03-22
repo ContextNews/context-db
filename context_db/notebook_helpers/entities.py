@@ -140,6 +140,25 @@ def unresolved_entities(ner_type: str = "ALL") -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["mention_text", "ner_type", "total_count"])
 
 
+def _print_entity(row, aliases: list) -> None:
+    print(f"QID:         {row.qid}")
+    print(f"Type:        {row.entity_type}")
+    print(f"Name:        {row.name}")
+    if row.description:
+        print(f"Description: {row.description}")
+    print(f"\nAliases ({len(aliases)}):")
+    for a in aliases:
+        print(f"  {a}")
+
+
+def _fetch_aliases(session, qid: str) -> list[str]:
+    return session.execute(text("""
+        SELECT alias FROM kb_entity_aliases
+        WHERE qid = :qid
+        ORDER BY alias
+    """), {"qid": qid}).scalars().all()
+
+
 def lookup_entity(alias: str) -> None:
     """Look up an entity by alias. Falls back to partial match if no exact match."""
     with get_session() as session:
@@ -172,20 +191,27 @@ def lookup_entity(alias: str) -> None:
                 display(pd.DataFrame(matches, columns=["qid", "entity_type", "name", "description"]))
                 return
 
-        aliases = session.execute(text("""
-            SELECT alias FROM kb_entity_aliases
-            WHERE qid = :qid
-            ORDER BY alias
-        """), {"qid": row.qid}).scalars().all()
+        aliases = _fetch_aliases(session, row.qid)
 
-    print(f"QID:         {row.qid}")
-    print(f"Type:        {row.entity_type}")
-    print(f"Name:        {row.name}")
-    if row.description:
-        print(f"Description: {row.description}")
-    print(f"\nAliases ({len(aliases)}):")
-    for a in aliases:
-        print(f"  {a}")
+    _print_entity(row, aliases)
+
+
+def lookup_entity_by_qid(qid: str) -> None:
+    """Look up an entity in the KB by QID."""
+    with get_session() as session:
+        row = session.execute(text("""
+            SELECT qid, entity_type, name, description
+            FROM kb_entities
+            WHERE qid = :qid
+        """), {"qid": qid}).one_or_none()
+
+        if not row:
+            print(f"No entity found with QID {qid!r}")
+            return
+
+        aliases = _fetch_aliases(session, qid)
+
+    _print_entity(row, aliases)
 
 
 def _check_exists(qid: str) -> bool:
