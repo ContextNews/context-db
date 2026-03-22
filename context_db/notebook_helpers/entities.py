@@ -36,7 +36,8 @@ def _fetch_wikidata(qid: str) -> dict:
         f"{_WIKIDATA_API}?action=wbgetentities&ids={qid}"
         "&format=json&languages=en&props=labels|descriptions|aliases|claims"
     )
-    with urllib.request.urlopen(url) as resp:
+    req = urllib.request.Request(url, headers={"User-Agent": "context-db/1.0 (https://github.com/ContextNews/context-db)"})
+    with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read())
     entity = data.get("entities", {}).get(qid)
     if not entity or "missing" in entity:
