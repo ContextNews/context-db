@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 
 from .base import Base
 
@@ -40,3 +40,21 @@ class TgCursor(Base):
     last_message_id = Column(Integer, nullable=False, default=0)
     backfill_complete = Column(Boolean, nullable=False, default=False)
     updated_at = Column(DateTime)
+
+
+class TgStructuredPost(Base):
+    __tablename__ = "tg_structured_posts"
+
+    post_id       = Column(Integer, ForeignKey("tg_posts.id"), primary_key=True)
+    latitude      = Column(Float, nullable=True)
+    longitude     = Column(Float, nullable=True)
+    location_name = Column(String, nullable=True)
+    label         = Column(Text, nullable=False)
+    priority      = Column(Integer, nullable=False)
+    story_id      = Column(String, ForeignKey("stories.id"), nullable=True)
+
+
+class TgPostNoise(Base):
+    __tablename__ = "tg_post_noise"
+
+    post_id = Column(Integer, ForeignKey("tg_posts.id"), primary_key=True)
