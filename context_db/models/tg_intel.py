@@ -21,7 +21,6 @@ class TgPost(Base):
     channel_id = Column(Integer, ForeignKey("tg_channels.id"), nullable=False, index=True)
     message_id = Column(Integer, nullable=False)
     text = Column(Text)
-    raw_json = Column(Text, nullable=False)
     date = Column(DateTime, nullable=False, index=True)
     edit_date = Column(DateTime)
     has_media = Column(Boolean, nullable=False, default=False)

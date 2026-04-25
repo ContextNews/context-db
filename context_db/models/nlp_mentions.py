@@ -1,5 +1,5 @@
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 
 from .base import Base
 
@@ -10,7 +10,6 @@ class ArticleEmbedding(Base):
     article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
     embedding_model = Column(String, primary_key=True)
     embedding = Column(Vector(None), nullable=False)
-    embedded_text = Column(Text)
     created_at = Column(DateTime, nullable=True)
 
 
