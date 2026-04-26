@@ -1,4 +1,4 @@
-from sqlalchemy import ARRAY, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 
 from .base import Base
 
@@ -39,6 +39,7 @@ class StoryEntity(Base):
     qid = Column(String, ForeignKey("kb_entities.qid"), primary_key=True)
     score = Column(Float, nullable=True)
     role = Column(String, nullable=True)
+    validated = Column(Boolean, nullable=False, server_default="false")
 
 
 class StoryEdge(Base):

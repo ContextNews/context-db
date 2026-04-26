@@ -1,5 +1,5 @@
 from geoalchemy2 import Geography
-from sqlalchemy import ARRAY, Column, ForeignKey, String, Text
+from sqlalchemy import ARRAY, Boolean, Column, DateTime, ForeignKey, String, Text, func
 
 from .base import Base
 
@@ -12,6 +12,8 @@ class KBEntity(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
+    date_added = Column(DateTime, nullable=False, server_default=func.now())
+    validated = Column(Boolean, nullable=False, server_default="false")
 
 
 class KBEntityAlias(Base):
