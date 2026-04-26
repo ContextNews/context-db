@@ -15,7 +15,8 @@ class TSSource(Base):
     __tablename__ = "ts_sources"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)  # "World Bank", "IMF"
+    name = Column(String, nullable=False, unique=True)
+    display_name = Column(String, nullable=True)
     url = Column(String, nullable=True)
 
 
