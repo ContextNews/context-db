@@ -37,3 +37,11 @@ class KBPerson(Base):
 
     qid = Column(String, ForeignKey("kb_entities.qid"), primary_key=True)
     nationalities = Column(ARRAY(String), nullable=True)
+
+
+class KBOrganization(Base):
+    __tablename__ = "kb_organizations"
+
+    qid = Column(String, ForeignKey("kb_entities.qid"), primary_key=True)
+    org_type = Column(String, nullable=False)
+    country_code = Column(String, nullable=True)

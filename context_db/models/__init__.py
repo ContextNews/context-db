@@ -3,7 +3,7 @@ from .core_article import Article, ArticleCluster, ArticleClusterArticle
 from .tg_intel import TgChannel, TgPost, TgCursor, TgStructuredPost, TgPostNoise
 from .nlp_mentions import ArticleEmbedding, ArticleEntityMention
 from .topics import Topic, ArticleTopic, StoryTopic
-from .kb_entities import KBEntity, KBEntityAlias, KBLocation, KBPerson
+from .kb_entities import KBEntity, KBEntityAlias, KBLocation, KBOrganization, KBPerson
 from .story import Story, ArticleStory, ArticleEntityResolved, StoryEntity, StoryEdge, StoryIndicator
 from .timeseries import TSEntity, TSSource, TSIndicator, TSDatapoint
 
@@ -13,7 +13,7 @@ __all__ = [
     "Article", "ArticleCluster", "ArticleClusterArticle",
     "ArticleEmbedding", "ArticleEntityMention",
     "Topic", "ArticleTopic", "StoryTopic",
-    "KBEntity", "KBEntityAlias", "KBLocation", "KBPerson",
+    "KBEntity", "KBEntityAlias", "KBLocation", "KBOrganization", "KBPerson",
     "Story", "ArticleStory", "ArticleEntityResolved", "StoryEntity", "StoryEdge", "StoryIndicator",
     "TSEntity", "TSSource", "TSIndicator", "TSDatapoint",
 ]
