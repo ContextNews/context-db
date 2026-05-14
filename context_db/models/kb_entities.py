@@ -45,3 +45,4 @@ class KBOrganization(Base):
     qid = Column(String, ForeignKey("kb_entities.qid"), primary_key=True)
     org_type = Column(String, nullable=False)
     country_code = Column(String, nullable=True)
+    acronym = Column(String, nullable=True)
