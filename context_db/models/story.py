@@ -40,6 +40,8 @@ class StoryEntity(Base):
     score = Column(Float, nullable=True)
     role = Column(String, nullable=True)
     validated = Column(Boolean, nullable=False, server_default="false")
+    is_key = Column(Boolean, nullable=False, server_default="false")
+    rank = Column(Integer, nullable=True)
 
 
 class StoryEdge(Base):
