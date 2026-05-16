@@ -46,3 +46,15 @@ class KBOrganization(Base):
     org_type = Column(String, nullable=False)
     country_code = Column(String, nullable=True)
     acronym = Column(String, nullable=True)
+
+
+class KBState(Base):
+    __tablename__ = "kb_states"
+
+    qid = Column(String, ForeignKey("kb_entities.qid"), primary_key=True)
+    iso_alpha_2 = Column(String(2), nullable=False, unique=True)
+    iso_alpha_3 = Column(String(3), nullable=True, unique=True)
+    capital_qid = Column(String, ForeignKey("kb_entities.qid"), nullable=True)
+    region = Column(String, nullable=True)
+    subregion = Column(String, nullable=True)
+    un_member = Column(Boolean, nullable=False, server_default="true")
